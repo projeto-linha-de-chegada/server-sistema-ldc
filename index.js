@@ -3,10 +3,26 @@ const app = express();
 const cors = require("cors");
 const pool = require("./db");
 const { json } = require("express");
+var FormData = require('form-data');
+var fs = require('fs');
+const http = require("http");
+const path = require("path");
 
 //middleware
 app.use(cors());
 app.use(express.json()); //req.body
+
+//pdf
+const multer = require("multer");
+const storage = multer.diskStorage({
+  destination: function(req, file, cb){
+    cb(null,"uploads/")
+  },
+  filename: function(req, file, cb){
+    cb(null, file.originalname + Date.now() + path.extname(file.originalname));
+  }
+})
+const uploadPdf = multer({storage});
 
 //ROUTES//
 
@@ -121,6 +137,36 @@ app.post("/alunos/verifyP", async (req, res) => {
   }
 });
 
+//cadastrar atividade de aluno sem pdf
+
+app.post("/atividades", async (req, res) => {
+  try {
+    const myJSON = req.body;
+    console.log(myJSON);
+
+    res.json("Atividade Cadastrada");
+
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+
+//cadastrar atividade de aluno com pdf
+
+app.post("/atividades/pdf", uploadPdf.single("file"), async (req, res) => {
+  try {
+    const myJSON = req.body;
+    console.log(myJSON);
+
+    res.json("Atividade Cadastrada");
+
+  } catch (err) {
+    console.error(err.message);
+  }
+});
+
+
 //update a todo
 
 app.put("/todos/:id", async (req, res) => {
@@ -153,5 +199,5 @@ app.delete("/todos/:id", async (req, res) => {
 });
 
 app.listen(5000, () => {
-  console.log("server has started on port 5000");
+  console.log("Servidor rodando na porta 5000");
 });
