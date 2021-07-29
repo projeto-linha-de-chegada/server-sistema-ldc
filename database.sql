@@ -41,12 +41,16 @@ CREATE TABLE IF NOT EXISTS atividades(
 	titulo VARCHAR(50) NOT NULL,
 	data_inicio VARCHAR(50) NOT NULL,
 	data_fim VARCHAR(50) NOT NULL,
+	categoria VARCHAR(10) NOT NULL,
+	sub_categoria VARCHAR(10) NOT NULL,
 	descricao VARCHAR(3000) NOT NULL,
 	quantidade_horas VARCHAR(10) NOT NULL,
 	usertoken VARCHAR(100) NOT NULL,
-	link VARCHAR(200),
-	pdf OID,
+	doc_link VARCHAR(200),
+	nome_pdf VARCHAR(100),
 	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (id),
 	FOREIGN KEY (usertoken) REFERENCES alunos (usertoken)
 );
+
+--INSERT INTO atividades(titulo, data_inicio, data_fim, categoria, sub_categoria, descricao, quantidade_horas, usertoken, doc_link, nome_pdf) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)

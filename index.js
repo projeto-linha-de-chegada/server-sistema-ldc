@@ -2,31 +2,14 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const pool = require("./db");
-const { json } = require("express");
-var FormData = require('form-data');
-var fs = require('fs');
-const http = require("http");
 const path = require("path");
+const fs = require("fs");
 
 //middleware
 app.use(cors());
 app.use(express.json()); //req.body
 
-//pdf
-const multer = require("multer");
-const storage = multer.diskStorage({
-  destination: function(req, file, cb){
-    cb(null,"uploads/")
-  },
-  filename: function(req, file, cb){
-    cb(null, file.originalname + Date.now() + path.extname(file.originalname));
-  }
-})
-const uploadPdf = multer({storage});
-
 //ROUTES//
-
-
 //************************************CADASTRO ALUNO***************************************************
 //Criar um aluno pendente
 
@@ -144,25 +127,74 @@ app.post("/atividades", async (req, res) => {
     const myJSON = req.body;
     console.log(myJSON);
 
+    const row = await pool.query("INSERT INTO atividades(titulo, data_inicio, data_fim, categoria, sub_categoria, descricao, quantidade_horas, usertoken, doc_link, nome_pdf) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [
+      myJSON.titulo, myJSON.dataInicio, myJSON.dataFim, myJSON.selectedCategoria, myJSON.selectedSubCategoria, myJSON.descricao, myJSON.quantHoras, myJSON.token, myJSON.link, myJSON.nomePdf
+    ]);
+
     res.json("Atividade Cadastrada");
 
   } catch (err) {
     console.log(err);
+    res.json("Um problema ocorreu!");
+  }
+});
+
+//cadastrar atividade de aluno sem pdf
+
+app.get("/atividades/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const busca = await pool.query("SELECT * FROM atividades WHERE usertoken = $1", [
+      token
+    ]);
+
+    if (busca.rowCount < 1) {
+      console.log("Não há registros");
+      res.json([]);
+    }
+    else {
+      console.log(busca.rows)
+      res.json(busca.rows);
+    }
+
+  } catch (err) {
+    console.log(err);
+    res.json("Um problema ocorreu!");
   }
 });
 
 
 //cadastrar atividade de aluno com pdf
 
-app.post("/atividades/pdf", uploadPdf.single("file"), async (req, res) => {
+app.post("/atividades/pdf/:nome", async (req, res) => {
   try {
-    const myJSON = req.body;
-    console.log(myJSON);
-
-    res.json("Atividade Cadastrada");
+    const { nome } = req.params;
+    const file = fs.createWriteStream("uploads/" + nome);
+    req.on("data", chunk => {
+      file.write(chunk);
+    })
+    req.on("end", () => {
+      file.end();
+      res.json("PDF Cadastrado");
+    })
 
   } catch (err) {
-    console.error(err.message);
+    console.log(err);
+    res.json("")
+  }
+});
+
+//enviar pdf para o cliente
+app.get('/download/:nome', async (req, res) => {
+  try{
+  const { nome } = req.params;
+  var filePath = "/uploads/" + nome; //caminho do arquivo completo
+  var fileName = nome; // O nome padrão que o browser vai usar pra fazer download
+  //res.download(filePath, fileName);
+  res.sendFile(__dirname + filePath);
+  }catch(err){
+    console.log(err);
   }
 });
 
