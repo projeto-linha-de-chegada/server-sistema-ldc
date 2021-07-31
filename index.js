@@ -7,19 +7,18 @@ const fs = require("fs");
 
 //middleware
 app.use(cors());
-app.use(express.json()); //req.body
+app.use(express.json());
 
-//ROUTES//
-//************************************CADASTRO ALUNO***************************************************
+
+//************************************ALUNOS PENDENTES***************************************************
 //Criar um aluno pendente
 
 app.post("/alunos", async (req, res) => {
   try {
     const newAluno = req.body;
-    console.log(newAluno);
+    console.log("Criando Aluno pendente: " + newAluno.nome + " " + newAluno.email);
 
     //validar criação
-
     const testarEmailAlunosPendentes = await pool.query(
       "SELECT * FROM alunos_pendentes WHERE email = $1", [newAluno.email]
     );
@@ -29,6 +28,7 @@ app.post("/alunos", async (req, res) => {
     );
 
     if (testarEmailAlunos.rowCount >= 1 || testarEmailAlunosPendentes.rowCount >= 1) {
+      console.log("Email já está em uso");
       res.json("Email já está em uso");
       return;
     }
@@ -40,32 +40,61 @@ app.post("/alunos", async (req, res) => {
       newAluno.curso, newAluno.usertoken]
     );
 
+    console.log("Cadastro solicitado ao Administrador!")
     res.json("Cadastro solicitado ao Administrador!");
 
   } catch (err) {
-
+    console.log(err);
     res.json("Um erro ocorreu!");
   }
 });
 
-//******************************GetAlunos*********************************************/
+//verificar se exite um aluno especifico na tabela alunos pendentes
+
+app.post("/alunos/verifyP", async (req, res) => {
+  try {
+    const myJSON = req.body;
+    console.log("Verificando existencia de aluno em pendencia: " + myJSON.email + " " + myJSON.senha);
+
+    const users = await pool.query("SELECT * FROM alunos_pendentes WHERE email = $1 and senha = $2", [
+      myJSON.email, myJSON.senha
+    ]);
+
+    if (users.rowCount < 1) {
+      console.log("Aluno não encontrado na lista de pendentes")
+      res.json([]);
+    }
+    else {
+      console.log("Presente na lista de pendentes");
+      res.json(users.rows[0]);
+    }
+
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+//************************************ALUNOS COM ACESSO***************************************************
 
 //retorna todos os alunos
 
 app.get("/alunos", async (req, res) => {
   try {
-
+    console.log("Buscando alunos pendentes...")
     const allAlunos = await pool.query("SELECT * FROM alunos_pendentes");
 
     if (allAlunos.rowCount < 1) {
+      console.log("Não há alunos pendentes no banco")
       res.json([]);
     }
 
     else {
+      console.log("Alunos pendentes encontrados!")
       res.json(allAlunos.rows);
     }
 
   } catch (err) {
+    console.log(err);
     res.json([]);
   }
 });
@@ -75,57 +104,35 @@ app.get("/alunos", async (req, res) => {
 app.post("/alunos/verify", async (req, res) => {
   try {
     const myJSON = req.body;
-    console.log(myJSON.email + " " + myJSON.senha);
+    console.log("Verificando existencia de aluno: " + myJSON.email + " " + myJSON.senha);
 
     const users = await pool.query("SELECT * FROM alunos WHERE email = $1 and senha = $2", [
       myJSON.email, myJSON.senha
     ]);
 
     if (users.rowCount < 1) {
-      console.log("usuario invalido")
+      console.log("Aluno não encontrado na lista de alunos")
       res.json([]);
     }
     else {
-      console.log(users.rows[0]);
+      console.log("Aluno encontrado na lista de alunos");
       res.json(users.rows[0]);
     }
 
   } catch (err) {
-    console.error(err.message);
+    console.log(err);
   }
 });
 
-//verificar se exite um aluno especifico na tabela alunos pendentes
 
-app.post("/alunos/verifyP", async (req, res) => {
-  try {
-    const myJSON = req.body;
-    console.log(myJSON.email + " " + myJSON.senha);
+//************************************ATIVIDADES DOS ALUNOS***************************************************
 
-    const users = await pool.query("SELECT * FROM alunos_pendentes WHERE email = $1 and senha = $2", [
-      myJSON.email, myJSON.senha
-    ]);
-
-    if (users.rowCount < 1) {
-      console.log("usuario pendente invalido")
-      res.json([]);
-    }
-    else {
-      console.log(users.rows[0]);
-      res.json(users.rows[0]);
-    }
-
-  } catch (err) {
-    console.error(err.message);
-  }
-});
-
-//cadastrar atividade de aluno sem pdf
+//cadastrar atividade de aluno com pdf
 
 app.post("/atividades", async (req, res) => {
   try {
     const myJSON = req.body;
-    console.log(myJSON);
+    console.log("Cadastrando nova atividade de userToken: " + myJSON.token);
 
     const row = await pool.query("INSERT INTO atividades(titulo, data_inicio, data_fim, categoria, sub_categoria, descricao, quantidade_horas, usertoken, doc_link, nome_pdf) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [
       myJSON.titulo, myJSON.dataInicio, myJSON.dataFim, myJSON.selectedCategoria, myJSON.selectedSubCategoria, myJSON.descricao, myJSON.quantHoras, myJSON.token, myJSON.link, myJSON.nomePdf
@@ -139,11 +146,12 @@ app.post("/atividades", async (req, res) => {
   }
 });
 
-//cadastrar atividade de aluno sem pdf
+//Retornar todas as atividades de um aluno
 
 app.get("/atividades/:token", async (req, res) => {
   try {
     const { token } = req.params;
+    console.log("Buscando atividades de UserToken: " + token)
 
     const busca = await pool.query("SELECT * FROM atividades WHERE usertoken = $1", [
       token
@@ -154,7 +162,7 @@ app.get("/atividades/:token", async (req, res) => {
       res.json([]);
     }
     else {
-      console.log(busca.rows)
+      console.log("Atividades encontradas!")
       res.json(busca.rows);
     }
 
@@ -165,11 +173,12 @@ app.get("/atividades/:token", async (req, res) => {
 });
 
 
-//cadastrar atividade de aluno com pdf
+//cadastrar pdf de uma atividade
 
 app.post("/atividades/pdf/:nome", async (req, res) => {
   try {
     const { nome } = req.params;
+    console.log("Cadastrando pdf: " + nome)
     const file = fs.createWriteStream("uploads/" + nome);
     req.on("data", chunk => {
       file.write(chunk);
@@ -187,34 +196,142 @@ app.post("/atividades/pdf/:nome", async (req, res) => {
 
 //enviar pdf para o cliente
 app.get('/download/:nome', async (req, res) => {
-  try{
-  const { nome } = req.params;
-  var filePath = "/uploads/" + nome; //caminho do arquivo completo
-  var fileName = nome; // O nome padrão que o browser vai usar pra fazer download
-  //res.download(filePath, fileName);
-  res.sendFile(__dirname + filePath);
-  }catch(err){
+  try {
+    const { nome } = req.params;
+    var filePath = "/uploads/" + nome; //caminho do arquivo completo
+    var fileName = nome; // O nome padrão que o browser vai usar pra fazer download
+    //res.download(filePath, fileName);
+    console.log("Gerando link de acesso ao arquivo: " + filePath);
+    res.sendFile(__dirname + filePath);
+  } catch (err) {
     console.log(err);
   }
 });
 
 
-//update a todo
+//update atividade com pdf
 
-app.put("/todos/:id", async (req, res) => {
+app.put("/atividades/pdf/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { description } = req.body;
-    const updateTodo = await pool.query(
-      "UPDATE todo SET description = $1 WHERE todo_id = $2",
-      [description, id]
+    const myJSON = req.body;
+    console.log(myJSON)
+    console.log("Atualizando atividade com pdf id: " + id);
+    console.log("deletando:" + __dirname + "\\uploads\\" + myJSON.nomeAntigoPdf)
+    
+    var filePath = __dirname + "\\uploads\\" + myJSON.nomeAntigoPdf; 
+    fs.unlinkSync(filePath);
+
+    const updateTitulo = await pool.query(
+      "UPDATE atividades SET titulo = $1 WHERE id = $2",
+      [myJSON.titulo, id]
     );
 
-    res.json("Todo was updated!");
+    const updateDataInicio = await pool.query(
+      "UPDATE atividades SET data_inicio = $1 WHERE id = $2",
+      [myJSON.dataInicio, id]
+    );
+
+    const updateDataFim = await pool.query(
+      "UPDATE atividades SET data_fim = $1 WHERE id = $2",
+      [myJSON.dataFim, id]
+    );
+
+    const updateDescricao = await pool.query(
+      "UPDATE atividades SET descricao = $1 WHERE id = $2",
+      [myJSON.descricao, id]
+    );
+
+    const updateQuantHoras = await pool.query(
+      "UPDATE atividades SET quantidade_horas = $1 WHERE id = $2",
+      [myJSON.quantHoras, id]
+    );
+
+    const updateDocLink = await pool.query(
+      "UPDATE atividades SET doc_Link = $1 WHERE id = $2",
+      [myJSON.docLink, id]
+    );
+
+    const updateCategoria = await pool.query(
+      "UPDATE atividades SET categoria = $1 WHERE id = $2",
+      [myJSON.selectedCategoria, id]
+    );
+
+    const updateSubCategoria = await pool.query(
+      "UPDATE atividades SET sub_categoria = $1 WHERE id = $2",
+      [myJSON.selectedSubCategoria, id]
+    );
+
+    const updateNomePdf = await pool.query(
+      "UPDATE atividades SET nome_pdf = $1 WHERE id = $2",
+      [myJSON.nomePdf, id]
+    );
+
+    res.json("Atividade Atualizada!");
   } catch (err) {
-    console.error(err.message);
+    console.log(err);
+    res.json("Um erro ocorreu!");
   }
 });
+
+app.put("/atividades/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const myJSON = req.body;
+    console.log("Atualizando atividade id: " + id);
+
+    const updateTitulo = await pool.query(
+      "UPDATE atividades SET titulo = $1 WHERE id = $2",
+      [myJSON.titulo, id]
+    );
+
+    const updateDataInicio = await pool.query(
+      "UPDATE atividades SET data_inicio = $1 WHERE id = $2",
+      [myJSON.dataInicio, id]
+    );
+
+    const updateDataFim = await pool.query(
+      "UPDATE atividades SET data_fim = $1 WHERE id = $2",
+      [myJSON.dataFim, id]
+    );
+
+    const updateDescricao = await pool.query(
+      "UPDATE atividades SET descricao = $1 WHERE id = $2",
+      [myJSON.descricao, id]
+    );
+
+    const updateQuantHoras = await pool.query(
+      "UPDATE atividades SET quantidade_horas = $1 WHERE id = $2",
+      [myJSON.quantHoras, id]
+    );
+
+    const updateDocLink = await pool.query(
+      "UPDATE atividades SET doc_Link = $1 WHERE id = $2",
+      [myJSON.docLink, id]
+    );
+
+    const updateCategoria = await pool.query(
+      "UPDATE atividades SET categoria = $1 WHERE id = $2",
+      [myJSON.selectedCategoria, id]
+    );
+
+    const updateSubCategoria = await pool.query(
+      "UPDATE atividades SET sub_categoria = $1 WHERE id = $2",
+      [myJSON.selectedSubCategoria, id]
+    );
+
+    const updateNomePdf = await pool.query(
+      "UPDATE atividades SET nome_pdf = $1 WHERE id = $2",
+      [myJSON.nomePdf, id]
+    );
+
+    res.json("Atividade Atualizada!");
+  } catch (err) {
+    console.log(err);
+    res.json("Um erro ocorreu!");
+  }
+});
+
 
 //delete a todo
 
