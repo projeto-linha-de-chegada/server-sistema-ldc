@@ -1,10 +1,12 @@
+DROP TABLE IF EXISTS atividades;
 DROP TABLE IF EXISTS alunos;
+DROP TABLE IF EXISTS alunos_pendentes;
+DROP TABLE IF EXISTS professores;
 
---tabela para os alunos já aprovados pelo administrador
 CREATE TABLE IF NOT EXISTS alunos(
 	id SERIAL NOT NULL,
-	nome VARCHAR(50) NOT NULL,
-	email VARCHAR(50) NOT NULL,
+	nome VARCHAR(200) NOT NULL,
+	email VARCHAR(200) NOT NULL,
 	senha VARCHAR(50) NOT NULL,
 	matricula VARCHAR(50) NOT NULL,
 	curso VARCHAR(100) NOT NULL,
@@ -14,16 +16,10 @@ CREATE TABLE IF NOT EXISTS alunos(
 	PRIMARY KEY (id)
 );
 
---INSERT INTO alunos (nome,email,senha,matricula,curso,usertoken) VALUES ('Felipe','felipe@gmail.com','lollol',412649,'engenharia',123);
---SELECT * FROM alunos;
-
-DROP TABLE IF EXISTS alunos_pendentes;
-
---tabela para alunos que ainda não tiveram cadastro aprovado pela coordenação
 CREATE TABLE IF NOT EXISTS alunos_pendentes(
 	id SERIAL NOT NULL,
 	nome VARCHAR(200) NOT NULL,
-	email VARCHAR(50) NOT NULL,
+	email VARCHAR(200) NOT NULL,
 	senha VARCHAR(50) NOT NULL,
 	matricula VARCHAR(50) NOT NULL,
 	curso VARCHAR(100) NOT NULL,
@@ -32,9 +28,6 @@ CREATE TABLE IF NOT EXISTS alunos_pendentes(
 	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (id)
 );
-
---INSERT INTO alunos_pendentes (nome,email,senha,matricula,curso,usertoken) VALUES ('Felipe','felipe@gmail.com','lollol',412649,'engenharia',123);
---SELECT * FROM alunos_pendentes;
 
 CREATE TABLE IF NOT EXISTS atividades(
 	id SERIAL NOT NULL,
@@ -53,4 +46,24 @@ CREATE TABLE IF NOT EXISTS atividades(
 	FOREIGN KEY (usertoken) REFERENCES alunos (usertoken)
 );
 
---INSERT INTO atividades(titulo, data_inicio, data_fim, categoria, sub_categoria, descricao, quantidade_horas, usertoken, doc_link, nome_pdf) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+CREATE TABLE IF NOT EXISTS professores(
+	id SERIAL NOT NULL,
+	nome VARCHAR(200) NOT NULL,
+	email VARCHAR(200) NOT NULL,
+	senha VARCHAR(50) NOT NULL,
+	matricula VARCHAR(50) NOT NULL,
+	usertoken VARCHAR(100) NOT NULL UNIQUE,
+	ativo BOOLEAN NOT NULL DEFAULT TRUE,
+	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS admins(
+	id SERIAL NOT NULL,
+	email VARCHAR(200) NOT NULL,
+	senha VARCHAR(50) NOT NULL,
+	usertoken VARCHAR(100) NOT NULL UNIQUE,
+	ativo BOOLEAN NOT NULL DEFAULT TRUE,
+	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (id)
+);

@@ -13,7 +13,7 @@ app.use(express.json());
 //************************************ALUNOS PENDENTES***************************************************
 //Criar um aluno pendente
 
-app.post("/alunos", async (req, res) => {
+app.post("/alunosPendentes", async (req, res) => {
   try {
     const newAluno = req.body;
     console.log("Criando Aluno pendente: " + newAluno.nome + " " + newAluno.email);
@@ -76,12 +76,35 @@ app.post("/alunos/verifyP", async (req, res) => {
 
 //************************************ALUNOS COM ACESSO***************************************************
 
-//retorna todos os alunos
+//retorna todos os alunos pendentes
+
+app.get("/alunosPendentes", async (req, res) => {
+  try {
+    console.log("Buscando alunos pendentes...")
+    const allAlunos = await pool.query("SELECT * FROM alunos_pendentes");
+
+    if (allAlunos.rowCount < 1) {
+      console.log("Não há alunos pendentes no banco")
+      res.json([]);
+    }
+
+    else {
+      console.log("Alunos pendentes encontrados!")
+      res.json(allAlunos.rows);
+    }
+
+  } catch (err) {
+    console.log(err);
+    res.json([]);
+  }
+});
+
+//retorna todos os alunos aprovados
 
 app.get("/alunos", async (req, res) => {
   try {
     console.log("Buscando alunos pendentes...")
-    const allAlunos = await pool.query("SELECT * FROM alunos_pendentes");
+    const allAlunos = await pool.query("SELECT * FROM alunos");
 
     if (allAlunos.rowCount < 1) {
       console.log("Não há alunos pendentes no banco")
@@ -329,6 +352,145 @@ app.put("/atividades/:id", async (req, res) => {
   } catch (err) {
     console.log(err);
     res.json("Um erro ocorreu!");
+  }
+});
+
+
+//************************************PROFESSORES***************************************************
+app.post("/professores", async (req, res) => {
+  try {
+    const myJSON = req.body;
+    console.log("Cadastrando novo professor de userToken: " + myJSON.usertoken);
+
+    const validarInsert = await pool.query(
+      "SELECT * FROM professor WHERE email = $1",
+      [myJSON.email]
+    );
+
+    if(validarInsert.rowCount > 0){
+      res.json("Já existe professor com esse Email");
+    }
+
+    const insertProfessor = await pool.query(
+      "INSERT INTO professores (nome, matricula, email, senha, usertoken) VALUES ($1,$2,$3,$4,$5)",
+      [myJSON.nome, myJSON.matricula, myJSON.email, myJSON.senha, myJSON.usertoken]
+    );
+
+    res.json("Professor Cadastrado");
+
+  } catch (err) {
+    console.log(err);
+    res.json("Um problema ocorreu!");
+  }
+});
+
+
+//************************************Admins***************************************************
+app.post("/admins/verify", async (req, res) => {
+  try {
+    const myJSON = req.body;
+    console.log("Verificando existencia de admin");
+
+    const validarInsert = await pool.query(
+      "SELECT * FROM admins WHERE email = $1 and senha = $2",
+      [myJSON.email, myJSON.senha]
+    );
+
+    if(validarInsert.rowCount > 0){
+      console.log("Admin encontrado!")
+      res.json(validarInsert.rows[0]);
+    }
+
+    res.json([]);
+
+  } catch (err) {
+    console.log(err);
+    res.json("Um problema ocorreu!");
+  }
+});
+
+//************************************CONTROLE DE ACESSO***************************************************
+app.get("/verify/:token", async (req, res) => {
+  try {
+    const {token} = req.params;
+    console.log("Verificando nivel de acesso");
+
+    const isProfessor = await pool.query(
+      "SELECT * FROM professores WHERE usertoken = $1",
+      [token]
+    );
+
+    if(isProfessor.rowCount > 0){
+      res.json("professor");
+      return;
+    }
+
+    const isAdmin = await pool.query(
+      "SELECT * FROM admins WHERE usertoken = $1",
+      [token]
+    );
+
+    if(isAdmin.rowCount > 0){
+      res.json("admin");
+      return;
+    }
+
+    const isAluno = await pool.query(
+      "SELECT * FROM alunos WHERE usertoken = $1",
+      [token]
+    );
+
+    if(isAluno.rowCount > 0){
+      res.json("aluno");
+      return;
+    }
+
+    res.json("");
+
+  } catch (err) {
+    console.log(err);
+    res.json("Um problema ocorreu!");
+  }
+});
+
+app.get("/liberarAcessoAluno/:id", async (req, res) => {
+  try {
+    const {id} = req.params;
+
+    const buscaAlunoPendente = await pool.query(
+      "SELECT * FROM alunos_pendentes WHERE id = $1",
+      [id]
+    );
+
+    if(buscaAlunoPendente.rowCount > 0){
+      console.log(buscaAlunoPendente.rows[0]);
+      try{
+
+        const newAluno = await pool.query(
+          "INSERT INTO alunos (nome,email,senha,matricula,curso,usertoken,data_criacao) VALUES($1,$2,$3,$4,$5,$6,$7)",
+          [buscaAlunoPendente.rows[0].nome, buscaAlunoPendente.rows[0].email,
+          buscaAlunoPendente.rows[0].senha,buscaAlunoPendente.rows[0].matricula,
+          buscaAlunoPendente.rows[0].curso, buscaAlunoPendente.rows[0].usertoken,
+          buscaAlunoPendente.rows[0].data_criacao]
+        );
+
+        const deleteAlunoPendente = await pool.query("DELETE FROM alunos_pendentes WHERE id = $1", [
+          id
+        ]);
+
+        res.json("Acesso liberado para aluno: " + buscaAlunoPendente.rows[0].nome)
+
+      }catch(err){
+        console.log(err);
+        res.json("Um problema ocorreu!")
+      }
+    }
+    
+    res.json("Um problema ocorreu");
+
+  } catch (err) {
+    console.log(err);
+    res.json("Um problema ocorreu!");
   }
 });
 
