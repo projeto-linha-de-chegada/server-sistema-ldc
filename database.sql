@@ -1,7 +1,7 @@
 DROP TABLE IF EXISTS atividades;
 DROP TABLE IF EXISTS alunos;
 DROP TABLE IF EXISTS alunos_pendentes;
-DROP TABLE IF EXISTS professores;
+DROP TABLE IF EXISTS avaliadores;
 
 CREATE TABLE IF NOT EXISTS alunos(
 	id SERIAL NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS atividades(
 	FOREIGN KEY (usertoken) REFERENCES alunos (usertoken)
 );
 
-CREATE TABLE IF NOT EXISTS professores(
+CREATE TABLE IF NOT EXISTS avaliadores(
 	id SERIAL NOT NULL,
 	nome VARCHAR(200) NOT NULL,
 	email VARCHAR(200) NOT NULL,
@@ -67,3 +67,35 @@ CREATE TABLE IF NOT EXISTS admins(
 	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (id)
 );
+
+CREATE TABLE IF NOT EXISTS avaliacoes(
+	id SERIAL NOT NULL,
+	token_aluno VARCHAR(100) NOT NULL UNIQUE,
+	token_avaliador BOOLEAN NOT NULL DEFAULT TRUE,
+	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS atividades_submetidas(
+	id SERIAL NOT NULL,
+	id_avaliacao SERIAL NOT NULL,
+	titulo VARCHAR(200) NOT NULL,
+	data_inicio VARCHAR(50) NOT NULL,
+	data_fim VARCHAR(50) NOT NULL,
+	categoria VARCHAR(10) NOT NULL,
+	sub_categoria VARCHAR(10) NOT NULL,
+	descricao VARCHAR(5000) NOT NULL,
+	quantidade_horas VARCHAR(10) NOT NULL,
+	usertoken VARCHAR(100) NOT NULL,
+	doc_link VARCHAR(1000),
+	nome_pdf VARCHAR(1000),
+	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	PRIMARY KEY (id),
+	FOREIGN KEY (usertoken) REFERENCES avaliacoes (token_aluno),
+	FOREIGN KEY (id_avaliacao) REFERENCES avaliacoes (id)
+);
+
+CREATE TABLE IF NOT EXISTS avaliador_selecionado(
+	id SERIAL NOT NULL,
+	id_avaliador_escolhido SERIAL NOT NULL
+)

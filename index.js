@@ -4,6 +4,7 @@ const cors = require("cors");
 const pool = require("./db");
 const path = require("path");
 const fs = require("fs");
+const { get } = require("http");
 
 //middleware
 app.use(cors());
@@ -98,6 +99,79 @@ app.post("/alunos/verify", async (req, res) => {
   }
 });
 
+//criar uma solicitação
+app.get("/solicitacao/:token", async (req, res) => {
+  try {
+
+    const {token} = req.params;
+    const myJSON = req.body;
+
+    const isAluno = await pool.query(
+      "SELECT * FROM alunos WHERE usertoken = $1",
+      [token]
+    );
+
+    if(isAluno.rowCount < 1){
+      res.json("Operação Inválida: Sem permissão de aluno");
+      return;
+    }
+
+
+    //escolher o avaliador que receberá a submissão
+    const findAvaliadores = await pool.query("SELECT * FROM avaliadores ORDER BY id");
+
+    if(findAvaliadores.rowCount < 1){
+      res.json("Não há avaliadores disponiveis, tente mais tarde!");
+      return;
+    }
+
+    var avaliadorEscolhido = [];
+    const getAvaliadorEscolhidoNumber = await pool.query("SELECT * FROM avaliador_selecionado");
+    
+    //Se nunca foi selecionado alguem, o proximo avaliador será o primeiro da lista
+    if(getAvaliadorEscolhidoNumber.rowCount < 1){
+      avaliadorEscolhido = findAvaliadores.rows[0];
+      const setAvaliador = await pool.query("INSERT INTO avaliador_selecionado (id_avaliador_escolhido) values ($1)", [
+        findAvaliadores.rows[0].id
+      ]);
+    }
+    else{
+      for(var i = 0; i < findAvaliadores.rowCount; i++){
+        //se já foi selecionado alguém antes, então o proximo da lista é o selecionado
+        
+        //lista de avaliadores foi toda usada... volte pro avaliador do inicio
+        if(findAvaliadores.rows[findAvaliadores.rowCount - 1].id === getAvaliadorEscolhidoNumber.rows[0].id_avaliador_escolhido){
+          const setAvalidor = await pool.query("UPDATE avaliador_selecionado SET id_avaliador_escolhido = $1 WHERE id = '1'",[
+            findAvaliadores.rows[0].id
+          ]);
+          break;
+        }
+
+        //Se ainda há avaliadores não-selecionados.. busque...
+        if(findAvaliadores.rows[i].id > getAvaliadorEscolhidoNumber.rows[0].id_avaliador_escolhido){
+          const setAvalidor = await pool.query("UPDATE avaliador_selecionado SET id_avaliador_escolhido = $1 WHERE id = '1'",[
+            findAvaliadores.rows[i].id
+          ]);
+          break;
+          //logica de clonar as atividades
+        }
+
+        
+      }
+    }
+
+
+
+
+    res.json("Solicitação Cadastrada");
+    return;
+
+  } catch (err) {
+    console.log(err);
+    res.json("Um problema ocorreu!");
+    return;
+  }
+});
 
 //************************************ATIVIDADES DOS ALUNOS***************************************************
 //cadastrar atividade de aluno com pdf
@@ -307,6 +381,28 @@ app.put("/atividades/:id", async (req, res) => {
   }
 });
 
+
+//deletar uma atividade
+
+app.delete("/atividades/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body;
+    
+    const deleteTodo = await pool.query("DELETE FROM atividades WHERE id = $1 AND usertoken = $2", [
+      id, body.token
+    ]);
+
+    res.json("Atividade deletada");
+    return;
+
+  } catch (err) {
+    console.log(err.message);
+    res.json("Ocorreu um erro!");
+    return;
+  }
+});
+
 //************************************Admins***************************************************
 //retorna todos os alunos pendentes
 
@@ -377,9 +473,9 @@ app.get("/alunos/:token", async (req, res) => {
   }
 });
 
-//retorna todos os professores
+//retorna todos os avaliadores
 
-app.get("/professores/:token", async (req, res) => {
+app.get("/avaliadores/:token", async (req, res) => {
   try {
     const { token } = req.params;
 
@@ -392,15 +488,15 @@ app.get("/professores/:token", async (req, res) => {
       return;
     }
 
-    const allAlunos = await pool.query("SELECT * FROM professores");
+    const allAvaliadores = await pool.query("SELECT * FROM avaliadores");
 
-    if (allAlunos.rowCount < 1) {
+    if (allAvaliadores.rowCount < 1) {
       res.json([]);
       return;
     }
 
     else {
-      res.json(allAlunos.rows);
+      res.json(allAvaliadores.rows);
       return;
     }
 
@@ -411,8 +507,8 @@ app.get("/professores/:token", async (req, res) => {
   }
 });
 
-//cria professor 
-app.post("/professores/:token", async (req, res) => {
+//cria avaliador
+app.post("/avaliadores/:token", async (req, res) => {
   try {
     const { token } = req.params;
     const myJSON = req.body;
@@ -428,21 +524,21 @@ app.post("/professores/:token", async (req, res) => {
     }
 
     const validarInsert = await pool.query(
-      "SELECT * FROM professores WHERE email = $1",
+      "SELECT * FROM avaliadores WHERE email = $1",
       [myJSON.email]
     );
 
     if (validarInsert.rowCount > 0) {
-      res.json("Já existe professor com esse Email");
+      res.json("Já existe avaliador com esse Email");
       return;
     }
 
-    const insertProfessor = await pool.query(
-      "INSERT INTO professores (nome, matricula, email, senha, usertoken) VALUES ($1,$2,$3,$4,$5)",
+    const insertAvaliador = await pool.query(
+      "INSERT INTO avaliadores (nome, matricula, email, senha, usertoken) VALUES ($1,$2,$3,$4,$5)",
       [myJSON.nome, myJSON.matricula, myJSON.email, myJSON.senha, myJSON.usertoken]
     );
 
-    res.json("Professor Cadastrado");
+    res.json("Avaliador Cadastrado");
     return;
 
   } catch (err) {
@@ -617,8 +713,8 @@ app.put("/ativarAluno", async (req, res) => {
 
 
 
-//desativar professor
-app.put("/desativarProfessor", async (req, res) => {
+//desativar avaliador
+app.put("/desativarAvaliador", async (req, res) => {
   try {
     const myJSON = req.body;
     const token = myJSON.token;
@@ -634,15 +730,15 @@ app.put("/desativarProfessor", async (req, res) => {
       return;
     }
 
-    const professor = await pool.query("SELECT * FROM professores WHERE id = $1", [
+    const avaliador = await pool.query("SELECT * FROM avaliadores WHERE id = $1", [
       id
     ]);
 
-    const update = await pool.query("UPDATE professores SET ativo = $1 WHERE id = $2", [
+    const update = await pool.query("UPDATE avaliadores SET ativo = $1 WHERE id = $2", [
       false, id
     ]);
 
-    res.json("Acesso suspenso para: " + professor.rows[0].nome);
+    res.json("Acesso suspenso para: " + avaliador.rows[0].nome);
     return;
 
   } catch (err) {
@@ -652,8 +748,8 @@ app.put("/desativarProfessor", async (req, res) => {
   }
 });
 
-//ativar professor
-app.put("/ativarProfessor", async (req, res) => {
+//ativar avaliador
+app.put("/ativarAvaliador", async (req, res) => {
   try {
     const myJSON = req.body;
     const token = myJSON.token;
@@ -669,15 +765,15 @@ app.put("/ativarProfessor", async (req, res) => {
       return;
     }
 
-    const professor = await pool.query("SELECT * FROM professores WHERE id = $1", [
+    const avaliador = await pool.query("SELECT * FROM avaliadores WHERE id = $1", [
       id
     ]);
 
-    const update = await pool.query("UPDATE professores SET ativo = $1 WHERE id = $2", [
+    const update = await pool.query("UPDATE avaliadores SET ativo = $1 WHERE id = $2", [
       true, id
     ]);
 
-    res.json("Acesso reativado para: " + professor.rows[0].nome);
+    res.json("Acesso reativado para: " + avaliador.rows[0].nome);
     return;
 
   } catch (err) {
@@ -692,13 +788,13 @@ app.get("/verify/:token", async (req, res) => {
   try {
     const { token } = req.params;
 
-    const isProfessor = await pool.query(
-      "SELECT * FROM professores WHERE usertoken = $1",
+    const isAvaliador = await pool.query(
+      "SELECT * FROM avaliadores WHERE usertoken = $1",
       [token]
     );
 
-    if (isProfessor.rowCount > 0) {
-      res.json("professor");
+    if (isAvaliador.rowCount > 0) {
+      res.json("avaliador");
       return;
     }
 
@@ -753,13 +849,13 @@ app.post("/admins/verify", async (req, res) => {
   }
 });
 
-//verifica se professor existe
-app.post("/professores-verify", async (req, res) => {
+//verifica se avaliador existe
+app.post("/avaliadores-verify", async (req, res) => {
   try {
     const myJSON = req.body;
 
     const validarInsert = await pool.query(
-      "SELECT * FROM professores WHERE email = $1 and senha = $2",
+      "SELECT * FROM avaliadores WHERE email = $1 and senha = $2",
       [myJSON.email, myJSON.senha]
     );
 
@@ -776,20 +872,6 @@ app.post("/professores-verify", async (req, res) => {
   }
 });
 
-
-//delete a todo
-
-app.delete("/todos/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const deleteTodo = await pool.query("DELETE FROM todo WHERE todo_id = $1", [
-      id
-    ]);
-    res.json("Todo was deleted!");
-  } catch (err) {
-    console.log(err.message);
-  }
-});
 
 app.listen(5000, () => {
   console.log("Servidor rodando na porta 5000");
