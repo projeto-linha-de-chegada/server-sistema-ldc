@@ -4,11 +4,15 @@ const cors = require("cors");
 const pool = require("./db");
 const path = require("path");
 const fs = require("fs");
-const { get } = require("http");
 
 //middleware
 app.use(cors());
 app.use(express.json());
+
+app.get("/", async (req, res) => {
+  res.json("Servidor do Banco de horas");
+  return;
+});
 
 
 //************************************ALUNOS PENDENTES***************************************************
@@ -103,65 +107,90 @@ app.post("/alunos/verify", async (req, res) => {
 app.get("/solicitacao/:token", async (req, res) => {
   try {
 
-    const {token} = req.params;
-    const myJSON = req.body;
+    const { token } = req.params;
 
     const isAluno = await pool.query(
       "SELECT * FROM alunos WHERE usertoken = $1",
       [token]
     );
 
-    if(isAluno.rowCount < 1){
+    if (isAluno.rowCount < 1) {
       res.json("Operação Inválida: Sem permissão de aluno");
       return;
     }
 
-
     //escolher o avaliador que receberá a submissão
     const findAvaliadores = await pool.query("SELECT * FROM avaliadores ORDER BY id");
 
-    if(findAvaliadores.rowCount < 1){
+    if (findAvaliadores.rowCount < 1) {
       res.json("Não há avaliadores disponiveis, tente mais tarde!");
       return;
     }
 
     var avaliadorEscolhido = [];
     const getAvaliadorEscolhidoNumber = await pool.query("SELECT * FROM avaliador_selecionado");
-    
+
     //Se nunca foi selecionado alguem, o proximo avaliador será o primeiro da lista
-    if(getAvaliadorEscolhidoNumber.rowCount < 1){
+    if (getAvaliadorEscolhidoNumber.rowCount < 1) {
       avaliadorEscolhido = findAvaliadores.rows[0];
       const setAvaliador = await pool.query("INSERT INTO avaliador_selecionado (id_avaliador_escolhido) values ($1)", [
         findAvaliadores.rows[0].id
       ]);
     }
-    else{
-      for(var i = 0; i < findAvaliadores.rowCount; i++){
+    else {
+      for (var i = 0; i < findAvaliadores.rowCount; i++) {
         //se já foi selecionado alguém antes, então o proximo da lista é o selecionado
-        
+
         //lista de avaliadores foi toda usada... volte pro avaliador do inicio
-        if(findAvaliadores.rows[findAvaliadores.rowCount - 1].id === getAvaliadorEscolhidoNumber.rows[0].id_avaliador_escolhido){
-          const setAvalidor = await pool.query("UPDATE avaliador_selecionado SET id_avaliador_escolhido = $1 WHERE id = '1'",[
+        if (findAvaliadores.rows[findAvaliadores.rowCount - 1].id === getAvaliadorEscolhidoNumber.rows[0].id_avaliador_escolhido) {
+          const setAvalidor = await pool.query("UPDATE avaliador_selecionado SET id_avaliador_escolhido = $1 WHERE id = '1'", [
             findAvaliadores.rows[0].id
           ]);
+          avaliadorEscolhido = findAvaliadores.rows[0];
           break;
         }
 
         //Se ainda há avaliadores não-selecionados.. busque...
-        if(findAvaliadores.rows[i].id > getAvaliadorEscolhidoNumber.rows[0].id_avaliador_escolhido){
-          const setAvalidor = await pool.query("UPDATE avaliador_selecionado SET id_avaliador_escolhido = $1 WHERE id = '1'",[
+        if (findAvaliadores.rows[i].id > getAvaliadorEscolhidoNumber.rows[0].id_avaliador_escolhido) {
+          const setAvalidor = await pool.query("UPDATE avaliador_selecionado SET id_avaliador_escolhido = $1 WHERE id = '1'", [
             findAvaliadores.rows[i].id
           ]);
+          avaliadorEscolhido = findAvaliadores.rows[i];
           break;
           //logica de clonar as atividades
         }
-
-        
       }
     }
 
+    console.log("Nova avaliação para: " + avaliadorEscolhido.nome);
 
+    //criar avaliação
+    const insertAvaliacao = await pool.query(
+      "INSERT INTO avaliacoes(token_aluno,token_avaliador,status) VALUES ($1,$2,$3)",
+      [token, avaliadorEscolhido.usertoken, "Pendente"]
+    );
 
+    //pegar o id da avaliacao
+    const getAvaliacao = await pool.query(
+      "SELECT * FROM avaliacoes WHERE token_aluno = $1 and token_avaliador = $2 ORDER BY id",
+      [token, avaliadorEscolhido.usertoken]
+    );
+
+    const avaliacaoID = getAvaliacao.rows[getAvaliacao.rowCount - 1].id;
+
+    //passar atividade do aluno para lista de atividades da avaliacao
+    const getAtividades = await pool.query("SELECT * FROM atividades WHERE usertoken = $1", [
+      token
+    ]);
+
+    console.log(getAtividades.rows[0].titulo);
+
+    var setAtividades = [];
+    for (var j = 0; j < getAtividades.rowCount; j++) {
+      setAtividades = await pool.query("INSERT INTO atividades_submetidas(id_avaliacao,titulo, data_inicio, data_fim, categoria, sub_categoria, descricao, quantidade_horas, usertoken, doc_link, nome_pdf) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)", [
+        avaliacaoID, getAtividades.rows[j].titulo, getAtividades.rows[j].data_inicio, getAtividades.rows[j].data_fim, getAtividades.rows[j].categoria, getAtividades.rows[j].sub_categoria, getAtividades.rows[j].descricao, getAtividades.rows[j].quantidade_horas, getAtividades.rows[j].usertoken, getAtividades.rows[j].doc_link, getAtividades.rows[j].nome_pdf
+      ])
+    }
 
     res.json("Solicitação Cadastrada");
     return;
@@ -172,6 +201,11 @@ app.get("/solicitacao/:token", async (req, res) => {
     return;
   }
 });
+
+
+//ver status de solicitacoes
+
+
 
 //************************************ATIVIDADES DOS ALUNOS***************************************************
 //cadastrar atividade de aluno com pdf
@@ -388,12 +422,283 @@ app.delete("/atividades/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const body = req.body;
-    
+
     const deleteTodo = await pool.query("DELETE FROM atividades WHERE id = $1 AND usertoken = $2", [
       id, body.token
     ]);
 
     res.json("Atividade deletada");
+    return;
+
+  } catch (err) {
+    console.log(err.message);
+    res.json("Ocorreu um erro!");
+    return;
+  }
+});
+
+//getSolicitacoes Aluno
+
+app.get("/alunoSolicitacoes/:token", async (req, res) => {
+  try {
+    
+    const { token } = req.params;
+
+    const isAluno = await pool.query(
+      "SELECT * FROM alunos WHERE usertoken = $1",
+      [token]
+    );
+
+    if (isAluno.rowCount < 1) {
+      res.json([]);
+      return;
+    }
+    
+    const getSolicitacoes = await pool.query(
+      "SELECT * FROM avaliacoes WHERE token_aluno = $1 ORDER BY id",
+      [token]
+    );
+
+    if(getSolicitacoes.rowCount < 1){
+      res.json([]);
+      return;
+    }
+
+    res.json(getSolicitacoes.rows);
+    return;
+
+  } catch (err) {
+    console.log(err.message);
+    res.json([]);
+    return;
+  }
+});
+
+//getAtividades de uma solicitacao avaliada
+app.post("/atividadesAvaliadas", async (req, res) => {
+  try {
+    
+    const body = req.body;
+
+    const isAluno = await pool.query(
+      "SELECT * FROM alunos WHERE usertoken = $1",
+      [body.token]
+    );
+
+    if (isAluno.rowCount < 1) {
+      res.json([]);
+      return;
+    }
+
+    const validator = await pool.query(
+      "SELECT * FROM avaliacoes WHERE token_aluno = $1 AND id = $2",
+      [body.token, body.id]
+    );
+
+    if (validator.rowCount < 1) {
+      res.json([]);
+      return;
+    }
+    
+    const getAtividades = await pool.query(
+      "SELECT * FROM atividades_submetidas WHERE usertoken = $1 and id_avaliacao = $2 ORDER BY id",
+      [body.token, validator.rows[0].id]
+    );
+
+    if(getAtividades.rowCount < 1){
+      res.json([]);
+      return;
+    }
+
+    res.json(getAtividades.rows);
+    return;
+
+  } catch (err) {
+    console.log(err.message);
+    res.json([]);
+    return;
+  }
+});
+
+//************************************Avaliadores***************************************************
+
+//getSolicitacoes
+app.get("/avaliadorSolicitacoes/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const isAvaliador = await pool.query(
+      "SELECT * FROM avaliadores WHERE usertoken = $1",
+      [token]
+    );
+
+    if (isAvaliador.rowCount < 1) {
+      console.log("Não é avaliador")
+      res.json([]);
+      return;
+    }
+
+    const solicitacoes = await pool.query("SELECT * FROM avaliacoes WHERE token_avaliador = $1", [
+      token
+    ]);
+
+    if (solicitacoes.rowCount < 1) {
+      res.json([]);
+      return;
+    };
+
+    var aluno;
+
+    for (var i = 0; i < solicitacoes.rowCount; i++) {
+
+      aluno = await pool.query("SELECT * FROM alunos WHERE usertoken = $1", [
+        solicitacoes.rows[i].token_aluno
+      ]);
+
+      if (aluno.rowCount < 1) {
+        solicitacoes.rows[i].token_aluno = "Nome indisponivel"
+      }
+      else {
+        solicitacoes.rows[i].token_aluno = aluno.rows[0].nome;
+      }
+    }
+
+    res.json(solicitacoes.rows);
+
+  } catch (err) {
+    console.log(err);
+    res.json([]);
+  }
+});
+
+//getAtividades de uma avaliação
+app.post("/atividadesAvaliacao", async (req, res) => {
+  try {
+    const body = req.body;
+
+    const isAvaliador = await pool.query(
+      "SELECT * FROM avaliadores WHERE usertoken = $1",
+      [body.token]
+    );
+
+    if (isAvaliador.rowCount < 1) {
+      console.log("Não é avaliador")
+      res.json([]);
+      return;
+    }
+
+    //verificar se essa avaliacao pertence a quem está solicitando
+    const validator = await pool.query("SELECT * FROM avaliacoes WHERE id = $1 AND token_avaliador = $2",[
+      body.id,body.token
+    ]);
+
+    if(validator.rowCount < 1){
+      res.json([]);
+      return;
+    }
+
+    const atividades = await pool.query("SELECT * FROM atividades_submetidas WHERE id_avaliacao = $1",[
+      body.id
+    ]);
+
+    if(atividades.rowCount < 1){
+      res.json([]);
+      return;
+    }
+
+    res.json(atividades.rows);
+
+  } catch (err) {
+    console.log(err);
+    res.json([]);
+  }
+});
+
+//enviarAvaliacao
+app.put("/enviarAvaliacao", async (req, res) => {
+  try {
+    
+    const body = req.body;
+
+    const isAvaliador = await pool.query(
+      "SELECT * FROM avaliadores WHERE usertoken = $1",
+      [body.token]
+    );
+
+    if (isAvaliador.rowCount < 1) {
+      res.json("Falha na permissão");
+      return;
+    }
+
+    //verificar a qual avaliação a atividade pertence
+    const validator = await pool.query("SELECT * FROM atividades_submetidas WHERE id = $1",[
+      body.id
+    ]);
+
+    if (validator.rowCount < 1) {
+      res.json("Atividade não existe");
+      return;
+    }
+
+    //verificar se essa avaliacao pertence a quem está solicitando
+    const validator1 = await pool.query("SELECT * FROM avaliacoes WHERE id = $1 AND token_avaliador = $2",[
+      validator.rows[0].id_avaliacao,body.token
+    ]);
+
+    if (validator1.rowCount < 1) {
+      res.json("Falha na permissão");
+      return;
+    }
+
+    //update
+    const update = await pool.query("UPDATE atividades_submetidas SET feedback = $1 WHERE id = $2",[
+      body.newValue, body.id
+    ]);
+
+    res.json("Feedback adicionado")
+    return;
+
+  } catch (err) {
+    console.log(err.message);
+    res.json("Ocorreu um erro!");
+    return;
+  }
+});
+
+//marca Avaliacao como concluida
+app.post("/finalizarAvaliacao", async (req, res) => {
+  try {
+    
+    const body = req.body;
+
+    const isAvaliador = await pool.query(
+      "SELECT * FROM avaliadores WHERE usertoken = $1",
+      [body.token]
+    );
+
+    if (isAvaliador.rowCount < 1) {
+      res.json("Falha na permissão");
+      return;
+    }
+
+    //verificar se essa avaliacao pertence a quem está solicitando
+    const validator1 = await pool.query("SELECT * FROM avaliacoes WHERE id = $1 AND token_avaliador = $2",[
+      body.id_avaliacao,body.token
+    ]);
+
+    console.log(body.id_avaliacao, body.token);
+
+    if (validator1.rowCount < 1) {
+      res.json("Falha na permissão");
+      return;
+    }
+
+    //update
+    const update = await pool.query("UPDATE avaliacoes SET status = $1 WHERE id = $2",[
+      "Avaliado", body.id_avaliacao
+    ]);
+
+    res.json("Submissão Avaliada")
     return;
 
   } catch (err) {

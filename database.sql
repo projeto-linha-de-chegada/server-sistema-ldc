@@ -70,8 +70,9 @@ CREATE TABLE IF NOT EXISTS admins(
 
 CREATE TABLE IF NOT EXISTS avaliacoes(
 	id SERIAL NOT NULL,
-	token_aluno VARCHAR(100) NOT NULL UNIQUE,
-	token_avaliador BOOLEAN NOT NULL DEFAULT TRUE,
+	token_aluno VARCHAR(100) NOT NULL,
+	token_avaliador VARCHAR(100) NOT NULL,
+	status VARCHAR(100) NOT NULL,
 	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (id)
 );
@@ -89,9 +90,9 @@ CREATE TABLE IF NOT EXISTS atividades_submetidas(
 	usertoken VARCHAR(100) NOT NULL,
 	doc_link VARCHAR(1000),
 	nome_pdf VARCHAR(1000),
+	feedback VARCHAR(4000),
 	data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (id),
-	FOREIGN KEY (usertoken) REFERENCES avaliacoes (token_aluno),
 	FOREIGN KEY (id_avaliacao) REFERENCES avaliacoes (id)
 );
 
